@@ -1,0 +1,44 @@
+Execute TinySQL
+
+Paso I:
+. .\tiny-sql-client.ps1
+
+Paso II:
+Execute-MyQuery -QueryFile "C:\Code_Documents\II_Semester\TinySQLDb-main\DataBase\script.tinysql" -Port 11000 -IP 127.0.0.1
+
+
+CREATE DATABASE Temp;
+SET DATABASE Temp;
+CREATE TABLE Students (ID INT, Name VARCHAR(50), Age INT, BirthDate DATETIME);
+
+SET DATABASE Temp;
+DROP TABLE Students;
+
+SHOW DATABASE;
+
+SHOW DATABASE PATHS;
+
+SET DATABASE Temp;
+INSERT INTO Students VALUES (1, 'Juan Perez', 30, '2024-01-15');
+INSERT INTO Students VALUES (2, 'Ana Gomez', 25, '2023-06-12');
+INSERT INTO Students VALUES (3, 'Carlos Lopez', 40, '2020-11-20');
+
+SET DATABASE Temp;
+CREATE INDEX idx_students_id ON Students(ID) OF TYPE BTREE;
+
+
+
+SELECT * FROM Students WHERE Age > 25 ORDER BY Name DESC;
+
+UPDATE Students SET Nombre = 'Juan', Edad = 21 WHERE ID = 1;
+
+DELETE FROM Estudiantes WHERE ID = 1;
+
+SET DATABASE Temp;
+CREATE INDEX idx_id ON Students (ID) USING BST;
+
+SELECT * FROM Students;
+SELECT nombre, edad FROM Students;
+
+SELECT * FROM Students WHERE edad > 30;
+SELECT * FROM Students WHERE edad > 20 ORDER BY nombre ASC;

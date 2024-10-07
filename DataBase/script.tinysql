@@ -1,0 +1,2 @@
+SET DATABASE Temp;
+INSERT INTO Students VALUES (1, 'Juan Perez', 30, '2024-01-15');

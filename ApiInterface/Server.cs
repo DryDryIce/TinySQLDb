@@ -74,6 +74,63 @@ namespace ApiInterface
 
             return SearchRec(root.Right, key);
         }
+        public bool Delete(string key)
+        {
+            root = DeleteRec(root, key);
+            return root != null;
+        }
+
+        private Node DeleteRec(Node root, string key)
+        {
+            if (root == null)
+                return root;
+
+            if (string.Compare(key, root.Key) < 0)
+            {
+                root.Left = DeleteRec(root.Left, key);
+            }
+            else if (string.Compare(key, root.Key) > 0)
+            {
+                root.Right = DeleteRec(root.Right, key);
+            }
+            else
+            {
+                // Caso 1: Nodo sin hijos (hoja)
+                if (root.Left == null && root.Right == null)
+                {
+                    return null;
+                }
+                // Caso 2: Nodo con un hijo
+                else if (root.Left == null)
+                {
+                    return root.Right;
+                }
+                else if (root.Right == null)
+                {
+                    return root.Left;
+                }
+                // Caso 3: Nodo con dos hijos
+                else
+                {
+                    root.Key = MinValue(root.Right);
+                    root.Right = DeleteRec(root.Right, root.Key);
+                }
+            }
+
+            return root;
+        }
+
+        private string MinValue(Node root)
+        {
+            string minv = root.Key;
+            while (root.Left != null)
+            {
+                minv = root.Left.Key;
+                root = root.Left;
+            }
+            return minv;
+        }
+
     }
 
     public class BTree
@@ -196,6 +253,208 @@ namespace ApiInterface
 
             return SearchRec(node.Children[i], key);
         }
+        public void Delete(string key)
+        {
+            if (root == null)
+            {
+                Console.WriteLine("The tree is empty.");
+                return;
+            }
+
+            DeleteRec(root, key);
+
+            if (root.Keys.Count == 0 && !root.IsLeaf)
+            {
+                root = root.Children[0];
+            }
+        }
+
+        private void DeleteRec(Node node, string key)
+        {
+            int idx = node.Keys.FindIndex(k => string.Compare(k, key) >= 0);
+
+            if (idx < node.Keys.Count && node.Keys[idx] == key)
+            {
+                if (node.IsLeaf)
+                {
+                    node.Keys.RemoveAt(idx);
+                }
+                else
+                {
+                    DeleteFromNonLeaf(node, idx);
+                }
+            }
+            else
+            {
+                if (node.IsLeaf)
+                {
+                    Console.WriteLine($"The key {key} does not exist in the tree.");
+                    return;
+                }
+
+                bool flag = (idx == node.Keys.Count);
+
+                if (node.Children[idx].Keys.Count < degree)
+                {
+                    Fill(idx, node);
+                }
+
+                if (flag && idx > node.Keys.Count)
+                {
+                    DeleteRec(node.Children[idx - 1], key);
+                }
+                else
+                {
+                    DeleteRec(node.Children[idx], key);
+                }
+            }
+        }
+
+        private void DeleteFromNonLeaf(Node node, int idx)
+        {
+            string key = node.Keys[idx];
+
+            if (node.Children[idx].Keys.Count >= degree)
+            {
+                string pred = GetPredecessor(node, idx);
+                node.Keys[idx] = pred;
+                DeleteRec(node.Children[idx], pred);
+            }
+            else if (node.Children[idx + 1].Keys.Count >= degree)
+            {
+                string succ = GetSuccessor(node, idx);
+                node.Keys[idx] = succ;
+                DeleteRec(node.Children[idx + 1], succ);
+            }
+            else
+            {
+                Merge(node, idx);
+                DeleteRec(node.Children[idx], key);
+            }
+        }
+        private string GetPredecessor(Node node, int idx)
+        {
+            Node current = node.Children[idx];
+            while (!current.IsLeaf)
+            {
+                current = current.Children[current.Keys.Count];
+            }
+            return current.Keys[current.Keys.Count - 1];
+        }
+
+        private string GetSuccessor(Node node, int idx)
+        {
+            Node current = node.Children[idx + 1];
+            while (!current.IsLeaf)
+            {
+                current = current.Children[0];
+            }
+            return current.Keys[0];
+        }
+
+        private void Fill(int idx, Node node)
+        {
+            if (idx != 0 && node.Children[idx - 1].Keys.Count >= degree)
+            {
+                BorrowFromPrev(idx, node);
+            }
+            else if (idx != node.Keys.Count && node.Children[idx + 1].Keys.Count >= degree)
+            {
+                BorrowFromNext(idx, node);
+            }
+            else
+            {
+                if (idx != node.Keys.Count)
+                {
+                    Merge(node, idx);
+                }
+                else
+                {
+                    Merge(node, idx - 1);
+                }
+            }
+        }
+
+        private void BorrowFromPrev(int idx, Node node)
+        {
+            Node child = node.Children[idx];
+            Node sibling = node.Children[idx - 1];
+
+            for (int i = child.Keys.Count - 1; i >= 0; --i)
+            {
+                child.Keys[i + 1] = child.Keys[i];
+            }
+
+            if (!child.IsLeaf)
+            {
+                for (int i = child.Children.Count - 1; i >= 0; --i)
+                {
+                    child.Children[i + 1] = child.Children[i];
+                }
+            }
+
+            child.Keys[0] = node.Keys[idx - 1];
+
+            if (!node.IsLeaf)
+            {
+                child.Children[0] = sibling.Children[sibling.Keys.Count];
+            }
+
+            node.Keys[idx - 1] = sibling.Keys[sibling.Keys.Count - 1];
+            sibling.Keys.RemoveAt(sibling.Keys.Count - 1);
+
+            if (!sibling.IsLeaf)
+            {
+                sibling.Children.RemoveAt(sibling.Children.Count - 1);
+            }
+        }
+
+        private void BorrowFromNext(int idx, Node node)
+        {
+            Node child = node.Children[idx];
+            Node sibling = node.Children[idx + 1];
+
+            child.Keys.Add(node.Keys[idx]);
+
+            if (!child.IsLeaf)
+            {
+                child.Children.Add(sibling.Children[0]);
+            }
+
+            node.Keys[idx] = sibling.Keys[0];
+            sibling.Keys.RemoveAt(0);
+
+            if (!sibling.IsLeaf)
+            {
+                sibling.Children.RemoveAt(0);
+            }
+        }
+
+        private void Merge(Node node, int idx)
+        {
+            Node child = node.Children[idx];
+            Node sibling = node.Children[idx + 1];
+
+            child.Keys.Add(node.Keys[idx]);
+
+            for (int i = 0; i < sibling.Keys.Count; ++i)
+            {
+                child.Keys.Add(sibling.Keys[i]);
+            }
+
+            if (!child.IsLeaf)
+            {
+                for (int i = 0; i < sibling.Children.Count; ++i)
+                {
+                    child.Children.Add(sibling.Children[i]);
+                }
+            }
+
+            node.Keys.RemoveAt(idx);
+            node.Children.RemoveAt(idx + 1);
+        }
+
+
     }
 
     public class Server
@@ -293,9 +552,9 @@ namespace ApiInterface
                 {
                     return InsertIntoTable(request);
                 }
-                else if (request.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))
+                else if (request.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))  // Manejar la sentencia UPDATE
                 {
-                    return UpdateTable(request);  // Manejar la sentencia UPDATE
+                    return UpdateTable(request);  // Llamar al método UpdateTable para procesar la consulta
                 }
                 else if (request.Trim().Equals("SHOW DATABASE PATHS", StringComparison.OrdinalIgnoreCase))
                 {
@@ -304,6 +563,10 @@ namespace ApiInterface
                 else if (request.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
                 {
                     return SelectFromTable(request);
+                }
+                else if (request.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)) // Agregar manejo para DELETE
+                {
+                    return DeleteFromTable(request); // Llamar al método DeleteFromTable para procesar la consulta
                 }
                 else
                 {
@@ -326,7 +589,7 @@ namespace ApiInterface
             {
                 Directory.CreateDirectory(path);
 
-                // Agregar información al System Catalog (SystemDatabases.txt)
+                // Agregar información al (SystemDatabases.txt)
                 string systemCatalogPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemDatabases.txt");
                 File.AppendAllText(systemCatalogPath, dbName + Environment.NewLine);
 
@@ -568,11 +831,13 @@ namespace ApiInterface
 
         private static string CreateIndex(string request)
         {
+            // Verificación de base de datos seleccionada
             if (string.IsNullOrEmpty(currentDatabase))
             {
                 return "No database selected. Please use 'SET DATABASE <db-name>' first.";
             }
 
+            // Regex para identificar la creación de índices
             var match = Regex.Match(request, @"CREATE\s+INDEX\s+(\w+)\s+ON\s+(\w+)\((\w+)\)\s+OF\s+TYPE\s+(\w+);?", RegexOptions.IgnoreCase);
 
             if (!match.Success)
@@ -580,6 +845,7 @@ namespace ApiInterface
                 return "Error: Invalid CREATE INDEX command. Expected format: CREATE INDEX <index_name> ON <table_name>(<column_name>) OF TYPE <index_type>";
             }
 
+            // Extraer las partes del comando
             string indexName = match.Groups[1].Value;
             string tableName = match.Groups[2].Value;
             string columnName = match.Groups[3].Value;
@@ -594,8 +860,6 @@ namespace ApiInterface
 
             // Leer las líneas de la tabla
             var lines = File.ReadAllLines(tablePath);
-
-            // Verificar si la columna existe
             string[] headers = lines[0].Split(',').Select(h => h.Trim().Split(' ')[0]).ToArray();
             int columnIndex = Array.IndexOf(headers, columnName);
             if (columnIndex == -1)
@@ -617,20 +881,56 @@ namespace ApiInterface
                 return "Invalid index type. Use 'BTREE' or 'BST'.";
             }
 
-            // Registrar el índice en SystemIndexes.txt
-            string systemIndexesPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemIndexes.txt");
-            File.AppendAllText(systemIndexesPath, $"{indexName} ON {tableName}({columnName}) OF TYPE {indexType}{Environment.NewLine}");
+            // Inserción de valores en el índice creado
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string[] row = lines[i].Split(',').Select(val => val.Trim()).ToArray();
+                string valueToIndex = row[columnIndex];
 
-            return $"Index '{indexName}' created successfully on column '{columnName}' of table '{tableName}' with type '{indexType}'.";
+                if (indexes[columnName] is BTree btree)
+                {
+                    btree.Insert(valueToIndex);
+                }
+                else if (indexes[columnName] is BinarySearchTree bst)
+                {
+                    bst.Insert(valueToIndex);
+                }
+            }
+
+            // Guardar la creación del índice en SystemIndexes.txt
+            try
+            {
+                string systemIndexesPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemIndexes.txt");
+
+                // Asegurarse de que el archivo existe o se crea correctamente
+                if (!File.Exists(systemIndexesPath))
+                {
+                    File.Create(systemIndexesPath).Dispose();  // Crea el archivo si no existe
+                }
+
+                // Añadir la información del índice al archivo
+                string indexEntry = $"{indexName} ON {tableName}({columnName}) OF TYPE {indexType}{Environment.NewLine}";
+                File.AppendAllText(systemIndexesPath, indexEntry);
+
+                return $"Index '{indexName}' created successfully on column '{columnName}' of table '{tableName}' with type '{indexType}'.";
+            }
+            catch (Exception ex)
+            {
+                return $"Error: Could not write index to SystemIndexes.txt - {ex.Message}";
+            }
         }
+
 
         private static void LoadIndexesOnStartup()
         {
+            // Ruta del archivo de índices
             string systemIndexesPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemIndexes.txt");
 
+            // Verificar si existe el archivo de índices
             if (File.Exists(systemIndexesPath))
             {
                 var indexLines = File.ReadAllLines(systemIndexesPath);
+
                 foreach (var indexLine in indexLines)
                 {
                     if (string.IsNullOrWhiteSpace(indexLine))
@@ -640,7 +940,7 @@ namespace ApiInterface
 
                     var parts = indexLine.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
 
-                    if (parts.Length != 6) // Ajuste a 6 partes
+                    if (parts.Length != 6) // Asegurarse de que la entrada tiene el formato adecuado
                     {
                         Console.WriteLine($"Error: Malformed index entry: '{indexLine}'");
                         continue;
@@ -648,24 +948,76 @@ namespace ApiInterface
 
                     string indexName = parts[0];
                     string tableNameWithColumn = parts[2];
-                    string tableName = tableNameWithColumn.Split('(')[0];  // Extraer la tabla
-                    string columnName = tableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer la columna
+                    string tableName = tableNameWithColumn.Split('(')[0];  // Extraer el nombre de la tabla
+                    string columnName = tableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer el nombre de la columna
                     string indexType = parts[5]; // Tipo de índice
 
-                    // Recrear el índice en memoria
-                    if (indexType.ToUpper() == "BTREE")
+                    // Buscar en todas las bases de datos para ver si la tabla existe
+                    string[] databases = Directory.GetDirectories(Directory.GetCurrentDirectory());
+                    bool tableFound = false;
+
+                    foreach (var dbPath in databases)
                     {
-                        Console.WriteLine($"Rebuilding BTREE index '{indexName}' for table '{tableName}', column '{columnName}'.");
-                        indexes[columnName] = new BTree(3); // Ajusta el grado según sea necesario
+                        string dbName = Path.GetFileName(dbPath);
+                        string tablePath = Path.Combine(dbPath, $"{tableName}.txt");
+
+                        if (File.Exists(tablePath))
+                        {
+                            Console.WriteLine($"Found table '{tableName}' in database '{dbName}'. Rebuilding index '{indexName}'.");
+
+                            // Leer las líneas de la tabla
+                            var lines = File.ReadAllLines(tablePath);
+
+                            // Verificar si la columna existe
+                            string[] headers = lines[0].Split(',').Select(h => h.Trim().Split(' ')[0]).ToArray();
+                            int columnIndex = Array.IndexOf(headers, columnName);
+                            if (columnIndex == -1)
+                            {
+                                Console.WriteLine($"Error: Column '{columnName}' not found in table '{tableName}' while loading index '{indexName}'.");
+                                continue;
+                            }
+
+                            // Recrear el índice en memoria
+                            if (indexType.ToUpper() == "BTREE")
+                            {
+                                indexes[columnName] = new BTree(3); // Ajustar el grado si es necesario
+                                Console.WriteLine($"Rebuilding BTREE index '{indexName}' for table '{tableName}', column '{columnName}'.");
+                            }
+                            else if (indexType.ToUpper() == "BST")
+                            {
+                                indexes[columnName] = new BinarySearchTree();
+                                Console.WriteLine($"Rebuilding BST index '{indexName}' for table '{tableName}', column '{columnName}'.");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Error: Invalid index type '{indexType}' for index '{indexName}'");
+                                continue;
+                            }
+
+                            // Insertar todos los valores de la columna en el índice
+                            for (int i = 1; i < lines.Length; i++)
+                            {
+                                string[] row = lines[i].Split(',').Select(val => val.Trim()).ToArray();
+                                string valueToIndex = row[columnIndex];
+
+                                if (indexes[columnName] is BTree btree)
+                                {
+                                    btree.Insert(valueToIndex);
+                                }
+                                else if (indexes[columnName] is BinarySearchTree bst)
+                                {
+                                    bst.Insert(valueToIndex);
+                                }
+                            }
+
+                            tableFound = true;
+                            break; // Dejar de buscar en otras bases de datos si la tabla se encuentra
+                        }
                     }
-                    else if (indexType.ToUpper() == "BST")
+
+                    if (!tableFound)
                     {
-                        Console.WriteLine($"Rebuilding BST index '{indexName}' for table '{tableName}', column '{columnName}'.");
-                        indexes[columnName] = new BinarySearchTree();
-                    }
-                    else
-                    {
-                        Console.WriteLine($"Error: Invalid index type '{indexType}' for index '{indexName}'");
+                        Console.WriteLine($"Warning: Table '{tableName}' not found in any database while loading index '{indexName}'. Skipping.");
                     }
                 }
             }
@@ -745,11 +1097,13 @@ namespace ApiInterface
                 writer.WriteLine(string.Join(",", values.Select(v => v.Trim())));
             }
 
-            // Actualizar los índices asociados
+            // Actualizar los índices asociados después de insertar los valores
             UpdateIndexesAfterInsert(tableName, columns, values);
 
             return $"Values inserted into '{tableName}' successfully.";
         }
+
+
 
         // Método para verificar si el valor ya existe en alguna columna con índice
         private static bool DuplicateInIndex(string tableName, string[] columns, string[] values)
@@ -770,13 +1124,17 @@ namespace ApiInterface
                     }
 
                     string indexedTableNameWithColumn = parts[2];
-                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer la tabla
-                    string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer la columna
+                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer el nombre de la tabla
+                    string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer el nombre de la columna
                     string indexType = parts[5]; // Tipo de índice
 
                     if (indexedTableName == tableName)
                     {
-                        int columnIndex = Array.IndexOf(columns, indexedColumnName);
+                        // Extraer los nombres de las columnas y verificar el índice
+                        string[] columnsWithTypes = columns;
+                        string[] columnNames = columnsWithTypes.Select(c => c.Trim().Split(' ')[0]).ToArray();  // Extraer solo los nombres de las columnas
+
+                        int columnIndex = Array.IndexOf(columnNames, indexedColumnName);  // Comparar solo los nombres
 
                         if (columnIndex == -1)
                         {
@@ -786,20 +1144,21 @@ namespace ApiInterface
 
                         string valueToCheck = values[columnIndex];
 
+                        // Verificar si el valor ya existe en el índice (BTREE o BST)
                         if (indexes.TryGetValue(indexedColumnName, out var indexObject))
                         {
                             if (indexType.ToUpper() == "BTREE" && indexObject is BTree btree)
                             {
-                                if (btree.Search(valueToCheck))
+                                if (btree.Search(valueToCheck)) // Verificar si el valor ya existe en el BTREE
                                 {
-                                    return true; // Duplicado encontrado
+                                    return true; // Duplicado encontrado en BTREE
                                 }
                             }
                             else if (indexType.ToUpper() == "BST" && indexObject is BinarySearchTree bst)
                             {
-                                if (bst.Search(valueToCheck))
+                                if (bst.Search(valueToCheck)) // Verificar si el valor ya existe en el BST
                                 {
-                                    return true; // Duplicado encontrado
+                                    return true; // Duplicado encontrado en BST
                                 }
                             }
                         }
@@ -813,6 +1172,8 @@ namespace ApiInterface
 
             return false; // No se encontraron duplicados
         }
+
+
 
 
 
@@ -854,13 +1215,16 @@ namespace ApiInterface
                     }
 
                     string indexedTableNameWithColumn = parts[2];
-                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer la tabla
-                    string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer la columna
+                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer el nombre de la tabla
+                    string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer el nombre de la columna
                     string indexType = parts[5]; // Tipo de índice
 
                     if (indexedTableName == tableName)
                     {
-                        int columnIndex = Array.IndexOf(columns, indexedColumnName);
+                        // Extraer solo los nombres de las columnas de la tabla, sin los tipos
+                        string[] columnNames = columns.Select(c => c.Trim().Split(' ')[0]).ToArray();  // Extraer solo los nombres de las columnas
+
+                        int columnIndex = Array.IndexOf(columnNames, indexedColumnName);  // Comparar solo los nombres
 
                         if (columnIndex == -1)
                         {
@@ -870,13 +1234,16 @@ namespace ApiInterface
 
                         string newValue = values[columnIndex];
 
-                        if (indexType.ToUpper() == "BTREE")
+                        // Insertar el nuevo valor en los índices correctos
+                        if (indexType.ToUpper() == "BTREE" && indexes.TryGetValue(indexedColumnName, out var btreeObj) && btreeObj is BTree btree)
                         {
                             Console.WriteLine($"Updating BTREE index for column '{indexedColumnName}' in table '{tableName}' with new value '{newValue}'.");
+                            btree.Insert(newValue);  // Insertar el valor en el índice BTREE
                         }
-                        else if (indexType.ToUpper() == "BST")
+                        else if (indexType.ToUpper() == "BST" && indexes.TryGetValue(indexedColumnName, out var bstObj) && bstObj is BinarySearchTree bst)
                         {
                             Console.WriteLine($"Updating BST index for column '{indexedColumnName}' in table '{tableName}' with new value '{newValue}'.");
+                            bst.Insert(newValue);  // Insertar el valor en el índice BST
                         }
                     }
                 }
@@ -885,19 +1252,19 @@ namespace ApiInterface
 
 
 
-
         //===================================================================================================================================================
         private static string SelectFromTable(string request)
         {
-            Console.WriteLine($"DEBUG: Received SELECT command: {request}");
+            Console.WriteLine($"DEBUG: Received SELECT command: '{request}'");
 
-            var match = Regex.Match(request, @"SELECT\s+(\*|[\w\s,]+)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(\w+)(?:\s+(ASC|DESC))?)?\s*;", RegexOptions.IgnoreCase);
+            var match = Regex.Match(request, @"^\s*SELECT\s+(\*|[\w\s,]+)\s+FROM\s+(\w+)(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(\w+)(?:\s+(ASC|DESC))?)?\s*;?\s*$", RegexOptions.IgnoreCase);
 
             if (!match.Success)
             {
                 return "Error: Invalid SELECT command.";
             }
 
+            // Extraer columnas, tabla, cláusula WHERE y orden
             string columns = match.Groups[1].Value.Trim();
             string tableName = match.Groups[2].Value.Trim();
             string whereClause = match.Groups[3].Value?.Trim();
@@ -918,14 +1285,23 @@ namespace ApiInterface
                 return $"Error: Table '{tableName}' has no data.";
             }
 
-            // Obtener los encabezados de la tabla
-            string[] headers = lines[0].Split(',').Select(h => h.Trim()).ToArray();
+            // Obtener los encabezados de la tabla y quitar cualquier parte relacionada con el tipo de datos
+            string[] headers = lines[0].Split(',')
+                .Select(h => h.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)[0])
+                .ToArray();
 
-            // Filtrar por WHERE si existe
-            List<string[]> result = lines.Skip(1) // Ignorar encabezado
-                .Select(line => line.Split(',').Select(val => val.Trim()).ToArray()) // Convertir a array
-                .Where(row => ApplyWhereClause(row, headers, whereClause)) // Aplicar filtro WHERE
-                .ToList();
+            string[] rows = lines.Skip(1).ToArray();  // Obtener las filas como un array de strings
+
+            // Aplicar la cláusula WHERE, si existe
+            List<string[]> result = string.IsNullOrEmpty(whereClause)
+                ? rows.Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray()).ToList() // Si no hay WHERE, devolver todas las filas
+                : ApplyWhereWithIndex(headers, rows, whereClause, tableName);  // Aplicar WHERE con o sin índice
+
+            // Asegurarse de que el filtro WHERE funcione correctamente
+            if (result.Count == 0)
+            {
+                return "No rows match the WHERE condition.";
+            }
 
             // Aplicar ORDER BY si existe
             if (!string.IsNullOrEmpty(orderByColumn))
@@ -940,13 +1316,55 @@ namespace ApiInterface
                 QuickSort(result, orderByIndex, 0, result.Count - 1, orderDirection == "DESC");
             }
 
-            // Mostrar los resultados
+            // Mostrar los resultados filtrados y ordenados
             string output = string.Join(",", headers) + Environment.NewLine; // Encabezados
             output += string.Join(Environment.NewLine, result.Select(row => string.Join(",", row))); // Filas
             return output;
         }
 
+        private static List<string[]> ApplyWhereWithIndex(string[] headers, string[] rows, string whereClause, string tableName)
+        {
+            var match = Regex.Match(whereClause, @"(\w+)\s*(=|>|<|like|not)\s*(.+)", RegexOptions.IgnoreCase);
+            if (!match.Success)
+            {
+                throw new Exception("Error: Invalid WHERE clause.");
+            }
 
+            string columnName = match.Groups[1].Value.Trim();
+            string operatorType = match.Groups[2].Value.Trim();
+            string value = match.Groups[3].Value.Trim().Trim('\'');
+
+            int columnIndex = Array.IndexOf(headers, columnName);
+            if (columnIndex == -1)
+            {
+                throw new Exception($"Error: Column '{columnName}' not found in table.");
+            }
+
+            // Buscar si hay un índice disponible para esta columna
+            if (indexes.ContainsKey(columnName))
+            {
+                Console.WriteLine($"Using index for column '{columnName}' in WHERE clause.");
+                if (indexes[columnName] is BinarySearchTree bst)
+                {
+                    return rows.Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray())
+                               .Where(row => bst.Search(row[columnIndex]))  // Verificar si el valor está en el índice
+                               .ToList(); // Devolver la fila completa como string[]
+                }
+                else if (indexes[columnName] is BTree btree)
+                {
+                    return rows.Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray())
+                               .Where(row => btree.Search(row[columnIndex]))  // Verificar si el valor está en el índice
+                               .ToList(); // Devolver la fila completa como string[]
+                }
+            }
+
+            // Si no hay índice, usar búsqueda secuencial
+            return rows.Select(row => row.Split(',')
+                       .Select(val => val.Trim().Trim('\'')) // Remover comillas
+                       .ToArray())
+                       .Where(row => ApplyWhereOperator(row[columnIndex], operatorType, value, columnName == "ID" || columnName == "Age")) // Detectar si la columna es numérica
+                       .ToList();
+        }
 
 
         // QuickSort para ordenar las filas
@@ -960,6 +1378,7 @@ namespace ApiInterface
             }
         }
 
+        // Método de partición para QuickSort
         private static int Partition(List<string[]> result, int columnIndex, int left, int right, bool desc)
         {
             string[] pivot = result[right];
@@ -968,128 +1387,111 @@ namespace ApiInterface
             for (int j = left; j < right; j++)
             {
                 bool comparison = desc
-                    ? string.Compare(result[j][columnIndex], pivot[columnIndex]) > 0
-                    : string.Compare(result[j][columnIndex], pivot[columnIndex]) < 0;
+                    ? string.Compare(result[j][columnIndex], pivot[columnIndex]) > 0  // Orden descendente
+                    : string.Compare(result[j][columnIndex], pivot[columnIndex]) < 0; // Orden ascendente
 
                 if (comparison)
                 {
                     i++;
-                    (result[i], result[j]) = (result[j], result[i]);
+                    (result[i], result[j]) = (result[j], result[i]);  // Intercambiar filas
                 }
             }
 
-            (result[i + 1], result[right]) = (result[right], result[i + 1]);
+            (result[i + 1], result[right]) = (result[right], result[i + 1]);  // Mover el pivote a su lugar
             return i + 1;
         }
 
-        // Función para aplicar la cláusula WHERE
-        private static bool ApplyWhereClause(string[] row, string[] headers, string whereClause)
-        {
-            if (string.IsNullOrEmpty(whereClause))
-            {
-                return true; // No hay WHERE, incluir todas las filas
-            }
-
-            // Parsear WHERE
-            var match = Regex.Match(whereClause, @"(\w+)\s*(=|>|<|like|not)\s*(.+)", RegexOptions.IgnoreCase);
-            if (!match.Success)
-            {
-                return false; // Cláusula WHERE no válida
-            }
-
-            string columnName = match.Groups[1].Value;
-            string operatorType = match.Groups[2].Value;
-            string value = match.Groups[3].Value.Trim('\'');
-
-            int columnIndex = Array.IndexOf(headers, columnName);
-            if (columnIndex == -1)
-            {
-                return false; // Columna no encontrada
-            }
-
-            string cellValue = row[columnIndex];
-
-            // Aplicar el operador
-            return operatorType switch
-            {
-                "=" => cellValue == value,
-                ">" => string.Compare(cellValue, value, StringComparison.OrdinalIgnoreCase) > 0,
-                "<" => string.Compare(cellValue, value, StringComparison.OrdinalIgnoreCase) < 0,
-                "like" => cellValue.Contains(value, StringComparison.OrdinalIgnoreCase),
-                "not" => cellValue != value,
-                _ => false
-            };
-        }
 
         //===================================================================================================================================================
         private static string UpdateTable(string request)
         {
-            Console.WriteLine($"DEBUG: Received UPDATE command: {request}");
+            if (string.IsNullOrEmpty(currentDatabase))
+            {
+                return "No database selected. Please use 'SET DATABASE <db-name>' first.";
+            }
 
-            var match = Regex.Match(request, @"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+?)(?:\s+WHERE\s+(.+?))?\s*;", RegexOptions.IgnoreCase);
+            // Expresión regular mejorada para detectar el comando UPDATE
+            var match = Regex.Match(request, @"UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*'?([^']+)'?\s*(?:WHERE\s+(.+))?;", RegexOptions.IgnoreCase);
 
             if (!match.Success)
             {
                 return "Error: Invalid UPDATE command.";
             }
 
-            string tableName = match.Groups[1].Value.Trim();
-            string columnName = match.Groups[2].Value.Trim();
-            string newValue = match.Groups[3].Value.Trim().Trim('\''); // Eliminar las comillas del nuevo valor
-            string whereClause = match.Groups[4].Value?.Trim();
+            string tableName = match.Groups[1].Value.Trim();   // Nombre de la tabla
+            string columnName = match.Groups[2].Value.Trim();  // Nombre de la columna a actualizar
+            string newValue = match.Groups[3].Value.Trim().Trim('\'');    // Nuevo valor que se va a establecer (puede ser numérico o de texto)
+            string whereClause = match.Groups[4].Value?.Trim(); // Condición WHERE (opcional)
 
-            // Verificar que la tabla exista
+            // Verificar si la tabla existe
             string tablePath = Path.Combine(Directory.GetCurrentDirectory(), currentDatabase, $"{tableName}.txt");
             if (!File.Exists(tablePath))
             {
                 return $"Table '{tableName}' does not exist.";
             }
 
-            // Leer la tabla
-            var lines = File.ReadAllLines(tablePath);
-            if (lines.Length <= 1)
+            // Leer el contenido de la tabla
+            var lines = File.ReadAllLines(tablePath).ToList();
+            if (lines.Count <= 1)
             {
                 return $"Error: Table '{tableName}' has no data.";
             }
 
-            // Obtener los encabezados de la tabla
-            string[] headers = lines[0].Split(',').Select(h => h.Trim()).ToArray();
+            // Obtener los encabezados de la tabla, conservando nombre y tipo de las columnas
+            string[] fullHeaders = lines[0].Split(',').Select(h => h.Trim()).ToArray();
+            string[] headers = fullHeaders.Select(h => h.Split(' ')[0]).ToArray(); // Solo nombres de columnas
+
+            // Validar que la columna a actualizar exista
             int columnIndex = Array.IndexOf(headers, columnName);
             if (columnIndex == -1)
             {
                 return $"Error: Column '{columnName}' not found in table '{tableName}'.";
             }
 
-            // Buscar si existe índice para la columna del WHERE (si aplica)
-            List<string[]> result = lines.Skip(1) // Ignorar encabezado
-                .Select(line => line.Split(',').Select(val => val.Trim()).ToArray()) // Convertir a array
-                .Where(row => ApplyWhereClause(row, headers, whereClause)) // Filtrar filas según WHERE
-                .ToList();
+            // Filas de la tabla (excluyendo los encabezados)
+            var rows = lines.Skip(1).Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray()).ToList();
 
-            // Actualizar los valores
-            for (int i = 0; i < result.Count; i++)
+            // Aplicar la cláusula WHERE si está presente, de lo contrario actualizar todas las filas
+            List<string[]> rowsToUpdate = string.IsNullOrEmpty(whereClause)
+                ? rows // Si no hay WHERE, actualizar todas las filas
+                : ApplyWhereWithIndex(headers, rows.Select(row => string.Join(",", row)).ToArray(), whereClause, tableName); // Aplicar WHERE
+
+            // Asegurarse de que hay filas que actualizar
+            if (rowsToUpdate.Count == 0)
             {
-                result[i][columnIndex] = newValue;
+                return "No rows match the WHERE condition.";
             }
 
-            // Escribir los cambios en la tabla
-            using (StreamWriter writer = new StreamWriter(tablePath))
+            // Actualizar las filas afectadas
+            foreach (var row in rowsToUpdate)
             {
-                writer.WriteLine(string.Join(",", headers)); // Escribir los encabezados
-                foreach (var row in result)
+                row[columnIndex] = newValue;
+            }
+
+            // Escribir los cambios en el archivo, reemplazando el contenido anterior
+            using (var writer = new StreamWriter(tablePath))
+            {
+                // Escribir los encabezados nuevamente (con nombre y tipo)
+                writer.WriteLine(string.Join(",", fullHeaders));
+
+                // Escribir las filas actualizadas
+                foreach (var row in rows)
                 {
                     writer.WriteLine(string.Join(",", row));
                 }
             }
 
-            // Actualizar los índices asociados si el campo actualizado tiene índice
-            UpdateIndexesAfterUpdate(tableName, headers, result, columnIndex, newValue);
+            // Actualizar los índices después de realizar el cambio
+            UpdateIndexesAfterUpdate(tableName, columnName, newValue, rowsToUpdate);
 
-            return $"Table '{tableName}' updated successfully.";
+            return $"{rowsToUpdate.Count} row(s) updated in table '{tableName}'.";
         }
 
-        // Función para actualizar los índices después de UPDATE
-        private static void UpdateIndexesAfterUpdate(string tableName, string[] columns, List<string[]> rows, int columnIndex, string newValue)
+
+
+
+        // Método para actualizar los índices después de una actualización
+        private static void UpdateIndexesAfterUpdate(string tableName, string columnName, string newValue, List<string[]> rowsToUpdate)
         {
             string systemIndexesPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemIndexes.txt");
 
@@ -1100,7 +1502,6 @@ namespace ApiInterface
                 {
                     var parts = indexLine.Split(' ');
 
-                    // Asegurarse de que la entrada tenga 6 partes
                     if (parts.Length != 6)
                     {
                         Console.WriteLine($"Warning: Malformed index entry in SystemIndexes.txt: {indexLine}. Skipping.");
@@ -1108,26 +1509,163 @@ namespace ApiInterface
                     }
 
                     string indexedTableNameWithColumn = parts[2];
-                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer la tabla
                     string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');
-                    string indexType = parts[5]; // Sexta parte
+
+                    if (indexedColumnName == columnName)
+                    {
+                        Console.WriteLine($"Updating index for column '{columnName}' in table '{tableName}' after UPDATE.");
+
+                        // Eliminar las entradas anteriores del índice y agregar las nuevas
+                        if (indexes[columnName] is BTree btree)
+                        {
+                            foreach (var row in rowsToUpdate)
+                            {
+                                btree.Insert(newValue);
+                            }
+                        }
+                        else if (indexes[columnName] is BinarySearchTree bst)
+                        {
+                            foreach (var row in rowsToUpdate)
+                            {
+                                bst.Insert(newValue);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        //===================================================================================================================================================
+        private static string DeleteFromTable(string request)
+        {
+            if (string.IsNullOrEmpty(currentDatabase))
+            {
+                return "No database selected. Please use 'SET DATABASE <db-name>' first.";
+            }
+
+            // Expresión regular ajustada para detectar comparaciones en WHERE (>, <, >=, <=, =, etc.)
+            var match = Regex.Match(request, @"DELETE\s+FROM\s+(\w+)\s+WHERE\s+(\w+)\s*(=|>|<|>=|<=)\s*('?[\w\d\s-]+'?);?", RegexOptions.IgnoreCase);
+            if (!match.Success)
+            {
+                return "Error: Invalid DELETE command.";
+            }
+
+            string tableName = match.Groups[1].Value.Trim(); // Nombre de la tabla
+            string columnName = match.Groups[2].Value.Trim(); // Nombre de la columna en la condición WHERE
+            string operatorType = match.Groups[3].Value.Trim(); // Operador de comparación (=, >, <, >=, <=)
+            string value = match.Groups[4].Value.Trim().Trim('\''); // Valor en la condición WHERE (se remueven las comillas simples si existen)
+
+            // Verificar si la tabla existe
+            string tablePath = Path.Combine(Directory.GetCurrentDirectory(), currentDatabase, $"{tableName}.txt");
+            if (!File.Exists(tablePath))
+            {
+                return $"Table '{tableName}' does not exist.";
+            }
+
+            // Leer el contenido de la tabla
+            var lines = File.ReadAllLines(tablePath).ToList();
+            if (lines.Count <= 1)
+            {
+                return $"Error: Table '{tableName}' has no data.";
+            }
+
+            // Obtener los encabezados de la tabla
+            string[] headers = lines[0].Split(',').Select(h => h.Trim().Split(' ')[0]).ToArray();
+            int columnIndex = Array.IndexOf(headers, columnName);
+
+            if (columnIndex == -1)
+            {
+                return $"Error: Column '{columnName}' not found in table '{tableName}'.";
+            }
+
+            // Determinar si la columna es numérica o no
+            bool isNumeric = columnName.Equals("ID", StringComparison.OrdinalIgnoreCase) || columnName.Equals("Age", StringComparison.OrdinalIgnoreCase);
+
+            // Filtrar las filas que cumplan con la cláusula WHERE
+            List<string[]> rowsToDelete = lines
+                .Skip(1) // Saltar encabezado
+                .Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray())
+                .Where(row => ApplyWhereOperator(row[columnIndex], operatorType, value, isNumeric)) // Aplicar WHERE
+                .ToList();
+
+            // Verificar si hay filas para eliminar
+            if (rowsToDelete.Count == 0)
+            {
+                return "No rows match the WHERE condition.";
+            }
+
+            // Filtrar las filas a eliminar. Usamos un método de comparación explícito para garantizar que las filas coincidan correctamente.
+            var rowsRemaining = lines
+                .Skip(1)
+                .Select(row => row.Split(',').Select(val => val.Trim().Trim('\'')).ToArray())
+                .Where(row => !rowsToDelete.Any(r => Enumerable.SequenceEqual(r, row)))
+                .ToList();
+
+            // Escribir los cambios en el archivo (reescribir las filas restantes)
+            using (var writer = new StreamWriter(tablePath))
+            {
+                writer.WriteLine(lines[0]); // Escribir los encabezados nuevamente
+
+                foreach (var row in rowsRemaining)
+                {
+                    writer.WriteLine(string.Join(",", row)); // Escribir las filas restantes
+                }
+            }
+
+            // Actualizar los índices después de eliminar las filas
+            UpdateIndexesAfterDelete(tableName, headers, rowsToDelete);
+
+            return $"{rowsToDelete.Count} row(s) deleted from table '{tableName}'.";
+        }
+
+
+
+        private static void UpdateIndexesAfterDelete(string tableName, string[] columns, List<string[]> rowsDeleted)
+        {
+            string systemIndexesPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemIndexes.txt");
+
+            if (File.Exists(systemIndexesPath))
+            {
+                var indexLines = File.ReadAllLines(systemIndexesPath);
+                foreach (var indexLine in indexLines)
+                {
+                    var parts = indexLine.Split(' ');
+
+                    if (parts.Length != 6)
+                    {
+                        Console.WriteLine($"Warning: Malformed index entry in SystemIndexes.txt: {indexLine}. Skipping.");
+                        continue;
+                    }
+
+                    string indexedTableNameWithColumn = parts[2];
+                    string indexedTableName = indexedTableNameWithColumn.Split('(')[0];  // Extraer el nombre de la tabla
+                    string indexedColumnName = indexedTableNameWithColumn.Split('(')[1].TrimEnd(')');  // Extraer el nombre de la columna
+                    string indexType = parts[5]; // Tipo de índice
 
                     if (indexedTableName == tableName)
                     {
-                        int indexColumnIndex = Array.IndexOf(columns, indexedColumnName);
+                        int columnIndex = Array.IndexOf(columns, indexedColumnName);  // Comparar solo los nombres
 
-                        // Validar si la columna actualizada tiene índice
-                        if (indexColumnIndex == columnIndex)
+                        if (columnIndex == -1)
                         {
-                            if (indexType.ToUpper() == "BTREE")
+                            Console.WriteLine($"Warning: Column '{indexedColumnName}' not found in table '{tableName}'. Skipping index update.");
+                            continue;
+                        }
+
+                        foreach (var row in rowsDeleted)
+                        {
+                            string valueToRemove = row[columnIndex];
+
+                            // Eliminar el valor de los índices correctos
+                            if (indexType.ToUpper() == "BTREE" && indexes.TryGetValue(indexedColumnName, out var btreeObj) && btreeObj is BTree btree)
                             {
-                                // Actualizar índice BTREE
-                                Console.WriteLine($"Updating BTREE index for column '{indexedColumnName}' in table '{tableName}' with new value '{newValue}'.");
+                                Console.WriteLine($"Removing value '{valueToRemove}' from BTREE index for column '{indexedColumnName}' in table '{tableName}'.");
+                                btree.Delete(valueToRemove);  // Eliminar el valor del índice BTREE
                             }
-                            else if (indexType.ToUpper() == "BST")
+                            else if (indexType.ToUpper() == "BST" && indexes.TryGetValue(indexedColumnName, out var bstObj) && bstObj is BinarySearchTree bst)
                             {
-                                // Actualizar índice BST
-                                Console.WriteLine($"Updating BST index for column '{indexedColumnName}' in table '{tableName}' with new value '{newValue}'.");
+                                Console.WriteLine($"Removing value '{valueToRemove}' from BST index for column '{indexedColumnName}' in table '{tableName}'.");
+                                bst.Delete(valueToRemove);  // Eliminar el valor del índice BST
                             }
                         }
                     }
@@ -1136,9 +1674,58 @@ namespace ApiInterface
         }
 
 
-
         //===================================================================================================================================================
+        private static bool ApplyWhereOperator(string columnValue, string operatorType, string value, bool isNumeric)
+        {
+            // Eliminar comillas simples del valor si las tiene
+            value = value.Trim('\'');
 
+            // Si la columna es numérica, convertimos ambos valores a enteros para comparar
+            if (isNumeric)
+            {
+                if (!int.TryParse(columnValue, out int intColumnValue) || !int.TryParse(value, out int intValue))
+                {
+                    throw new Exception("Error: Invalid numeric value.");
+                }
+
+                switch (operatorType)
+                {
+                    case "=":
+                        return intColumnValue == intValue;
+                    case ">":
+                        return intColumnValue > intValue;
+                    case "<":
+                        return intColumnValue < intValue;
+                    case ">=":
+                        return intColumnValue >= intValue;
+                    case "<=":
+                        return intColumnValue <= intValue;
+                    case "not":
+                        return intColumnValue != intValue;
+                    default:
+                        throw new Exception("Error: Invalid comparison operator for numeric values.");
+                }
+            }
+            else
+            {
+                // Comparaciones para cadenas de texto
+                switch (operatorType)
+                {
+                    case "=":
+                        return columnValue == value;
+                    case ">":
+                        return string.Compare(columnValue, value) > 0;
+                    case "<":
+                        return string.Compare(columnValue, value) < 0;
+                    case "like":
+                        return columnValue.Contains(value);
+                    case "not":
+                        return columnValue != value;
+                    default:
+                        throw new Exception("Error: Invalid comparison operator.");
+                }
+            }
+        }
 
 
     }

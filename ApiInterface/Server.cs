@@ -535,14 +535,31 @@ namespace ApiInterface
                         return $"Database '{dbName}' does not exist.";
                     }
                 }
+                if (request.Trim().Equals("SHOW TABLES", StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowTables(); // Imprime directamente en la consola
+                    return "Tables displayed.";
+                }
+                else if (request.StartsWith("SHOW TABLE", StringComparison.OrdinalIgnoreCase))
+                {
+                    var tableName = request.Split(' ')[2].TrimEnd(';');
+                    ShowTableContents(tableName); // Imprime directamente en la consola
+                    return "Table content displayed.";
+                }
                 else if (request.StartsWith("DROP TABLE"))
                 {
                     var tableName = request.Split(' ')[2].TrimEnd(';');
                     return DropTable(tableName);
                 }
-                else if (request.Trim().Equals("SHOW DATABASES", StringComparison.OrdinalIgnoreCase))
+                if (request.Trim().Equals("SHOW DATABASES", StringComparison.OrdinalIgnoreCase))
                 {
-                    return ShowDatabases();
+                    ShowDatabases(); // Imprime directamente en la consola
+                    return "Databases displayed.";
+                }
+                else if (request.Trim().Equals("SHOW DATABASE PATHS", StringComparison.OrdinalIgnoreCase))
+                {
+                    ShowDatabasePaths(); // Imprime directamente en la consola
+                    return "Database paths displayed.";
                 }
                 else if (request.StartsWith("CREATE INDEX"))
                 {
@@ -555,10 +572,6 @@ namespace ApiInterface
                 else if (request.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase))  // Manejar la sentencia UPDATE
                 {
                     return UpdateTable(request);  // Llamar al método UpdateTable para procesar la consulta
-                }
-                else if (request.Trim().Equals("SHOW DATABASE PATHS", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ShowDatabasePaths();
                 }
                 else if (request.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
                 {
@@ -620,55 +633,137 @@ namespace ApiInterface
             }
         }
         //===================================================================================================================================================
-        private static string ShowDatabases()
+        private static void ShowTables()
+        {
+            if (string.IsNullOrEmpty(currentDatabase))
+            {
+                Console.WriteLine("No database selected. Please use 'SET DATABASE <db-name>' first.");
+                return;
+            }
+
+            // Ruta al directorio de la base de datos actual
+            string databasePath = Path.Combine(Directory.GetCurrentDirectory(), currentDatabase);
+
+            if (!Directory.Exists(databasePath))
+            {
+                Console.WriteLine($"Error: Database '{currentDatabase}' does not exist.");
+                return;
+            }
+
+            // Obtener todos los archivos con extensión .txt (suponiendo que representan tablas)
+            string[] tableFiles = Directory.GetFiles(databasePath, "*.txt");
+
+            // Verificar si hay tablas
+            if (tableFiles.Length == 0)
+            {
+                Console.WriteLine("No tables found in the current database.");
+                return;
+            }
+
+            // Extraer solo los nombres de las tablas sin la extensión
+            string[] tableNames = Array.ConvertAll(tableFiles, tablePath => Path.GetFileNameWithoutExtension(tablePath));
+
+            // Imprimir los nombres de las tablas
+            Console.WriteLine("Tables:");
+            foreach (string tableName in tableNames)
+            {
+                Console.WriteLine(tableName);
+            }
+        }
+
+        private static void ShowTableContents(string tableName)
+        {
+            if (string.IsNullOrEmpty(currentDatabase))
+            {
+                Console.WriteLine("No database selected. Please use 'SET DATABASE <db-name>' first.");
+                return;
+            }
+
+            // Ruta al archivo de la tabla en la base de datos actual
+            string tablePath = Path.Combine(Directory.GetCurrentDirectory(), currentDatabase, $"{tableName}.txt");
+
+            if (!File.Exists(tablePath))
+            {
+                Console.WriteLine($"Table '{tableName}' does not exist in the current database.");
+                return;
+            }
+
+            // Leer todas las líneas del archivo de la tabla
+            string[] lines = File.ReadAllLines(tablePath);
+
+            // Verificar si la tabla tiene contenido
+            if (lines.Length == 0)
+            {
+                Console.WriteLine($"Table '{tableName}' is empty.");
+                return;
+            }
+
+            // Imprimir los contenidos de la tabla
+            Console.WriteLine($"Table: {tableName}");
+            foreach (string line in lines)
+            {
+                Console.WriteLine(line);
+            }
+        }
+
+        private static void ShowDatabases()
         {
             string systemCatalogPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemDatabases.txt");
 
-            // Si el archivo no existe, devolver un mensaje
+            // Si el archivo no existe, mostrar un mensaje
             if (!File.Exists(systemCatalogPath))
             {
-                return "No databases found.";
+                Console.WriteLine("No databases found.");
+                return;
             }
 
             // Leer las bases de datos
             var databases = File.ReadAllLines(systemCatalogPath);
 
-            // Si el archivo está vacío o no tiene bases de datos, devolver un mensaje
+            // Si el archivo está vacío o no tiene bases de datos, mostrar un mensaje
             if (databases.Length == 0 || string.IsNullOrWhiteSpace(string.Join("", databases)))
             {
-                return "No databases found.";
+                Console.WriteLine("No databases found.");
+                return;
             }
 
-            // Devolver la lista de bases de datos
-            return "Databases:\n" + string.Join("\n", databases.Where(db => !string.IsNullOrWhiteSpace(db)));
+            // Imprimir la lista de bases de datos
+            Console.WriteLine("Databases:");
+            foreach (var db in databases.Where(db => !string.IsNullOrWhiteSpace(db)))
+            {
+                Console.WriteLine(db);
+            }
         }
 
         // Muestra los PATHs de las DATABASEs
-        private static string ShowDatabasePaths()
+        private static void ShowDatabasePaths()
         {
             string systemCatalogPath = Path.Combine(Directory.GetCurrentDirectory(), "SystemDatabases.txt");
 
-            // Si el archivo no existe, devolver un mensaje
+            // Si el archivo no existe, mostrar un mensaje
             if (!File.Exists(systemCatalogPath))
             {
-                return "No databases found.";
+                Console.WriteLine("No databases found.");
+                return;
             }
 
             // Leer las bases de datos
             var databases = File.ReadAllLines(systemCatalogPath);
 
-            // Si el archivo está vacío o no tiene bases de datos, devolver un mensaje
+            // Si el archivo está vacío o no tiene bases de datos, mostrar un mensaje
             if (databases.Length == 0 || string.IsNullOrWhiteSpace(string.Join("", databases)))
             {
-                return "No databases found.";
+                Console.WriteLine("No databases found.");
+                return;
             }
 
-            // Obtener las rutas completas de cada base de datos
-            var databasePaths = databases.Where(db => !string.IsNullOrWhiteSpace(db))
-                                         .Select(db => Path.Combine(Directory.GetCurrentDirectory(), db));
-
-            // Devolver las rutas completas
-            return "Database Paths:\n" + string.Join("\n", databasePaths);
+            // Obtener las rutas completas de cada base de datos y mostrarlas
+            Console.WriteLine("Database Paths:");
+            foreach (var dbPath in databases.Where(db => !string.IsNullOrWhiteSpace(db))
+                                            .Select(db => Path.Combine(Directory.GetCurrentDirectory(), db)))
+            {
+                Console.WriteLine(dbPath);
+            }
         }
         //===================================================================================================================================================
         private static string CreateTable(string request)
